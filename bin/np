@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import subprocess
+import requests
+import base64
+from utility import check_status
+from searcher import ImageSearcher
+from post_slack import post_slack
+from post_tweet import get_twitter, post_image_tweet
+
+
+default_post_to = 'lab'
+np_slack_channel = 'times_roo'
+np_slack_username = 'nowplaying'
+np_slack_icon_emoji = 'musical_note'
+
+class Song(object):
+    str_format='{title} / {album} / {artist}'
+
+    def __init__(self):
+        self.data = dict()
+        self.load_song_data()
+
+    def load_song_data(self):
+        cmd = 'rhythmbox-client'
+        opt = '--print-playing-format={}'
+        pp_format = '%tt\t%aa\t%at'
+        cmdset = [cmd, opt.format(pp_format)]
+        output = subprocess.check_output(cmdset).strip()
+        if output != b'':
+            utf8_output = output.decode('utf-8')
+            split_data = output.decode('utf-8').split('\t')
+            self.data['title'] = split_data[0]
+            self.data['artist'] = split_data[1]
+            self.data['album'] = split_data[2]
+            self.is_playing = True
+        else:
+            print('Now No Playing Song')
+            self.is_playing = False
+
+    def __str__(self):
+        return self.str_format.format(**self.data)
+
+
+class AlbumJacket(object):
+    def __init__(self, song, searcher):
+        self.song = song
+        self.searcher = searcher
+        self.search_jacket()
+
+    def search_jacket(self, query_format='{artist} {album}'):
+        query = query_format.format(**self.song.data)
+        res = self.searcher.search_image(query)
+        self.jacket_img_url = res
+
+    def as_base64(self):
+        res = requests.get(self.jacket_img_url)
+        if check_status(res.status_code):
+            return base64.urlsafe_b64encode(res.content)
+        return None
+
+
+def post_nowplaying(post_to):
+    song = Song()
+    if not song.is_playing:
+        print('No Song')
+        return
+    tweet = 'NowPlaying: {} #nowplaying'.format(song.__str__())
+
+    img_searcher = ImageSearcher('img_srch_secret')
+    jacket = AlbumJacket(song, img_searcher)
+
+    if post_to == 'tw':
+        twitter = get_twitter('np_tw_secret')
+        post_image_tweet(twitter, tweet, jacket.as_base64())
+    else:
+        post_slack('{}\n{}'.format(tweet, jacket.jacket_img_url),
+                   post_to,
+                   np_slack_channel,
+                   np_slack_username,
+                   np_slack_icon_emoji)
+
+if __name__ == '__main__':
+    print ('to [{}]: '.format(default_post_to), end='')
+    post_to = input().strip() or default_post_to
+    post_nowplaying(post_to)
