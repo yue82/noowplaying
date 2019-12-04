@@ -10,8 +10,8 @@ from post_slack import post_slack
 from post_tweet import get_twitter, post_image_tweet
 
 
-default_post_to = 'lab'
-np_slack_channel = 'times_roo'
+default_post_to = 'tw'                    # 'tw' or slack workspace name
+np_slack_channel = 'nowplaying'
 np_slack_username = 'nowplaying'
 np_slack_icon_emoji = 'musical_note'
 
